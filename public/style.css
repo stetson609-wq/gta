@@ -1,0 +1,9 @@
+body {
+  transition: background 0.4s, color 0.4s;
+}
+input, button {
+  transition: all 0.25s ease;
+}
+a {
+  transition: color 0.25s;
+}
