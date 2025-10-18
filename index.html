@@ -1,88 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smart GTA Clothing Search</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Forge Search</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cheerio@1.0.0-rc.12/dist/cheerio.min.js"></script>
+<style>
+body { transition: background 0.3s, color 0.3s; }
+input, button { transition: all 0.25s ease; }
+a { transition: color 0.25s; }
+.copy-btn { cursor:pointer; transition: all 0.2s; }
+.copy-btn:hover { color: #818cf8; }
+</style>
 </head>
-
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
-  <div class="w-full max-w-xl bg-gray-800 rounded-2xl p-8 shadow-2xl">
-    <h1 class="text-3xl font-bold text-center mb-6">Smart Forge Search</h1>
 
-    <form id="searchForm" class="space-y-4">
-      <input
-        id="query"
-        type="text"
-        placeholder="e.g. Brown Sessanta Nove Varsity"
-        class="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      />
+<div class="w-full max-w-xl bg-gray-800 rounded-2xl p-8 shadow-2xl">
+  <h1 class="text-3xl font-bold text-center mb-6">Smart Forge Search</h1>
 
-      <div class="flex justify-center gap-4">
-        <label class="flex items-center gap-2">
-          <input type="radio" name="gender" value="male" class="accent-indigo-500" /> Male
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="radio" name="gender" value="female" class="accent-indigo-500" /> Female
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="radio" name="gender" value="" class="accent-indigo-500" checked /> Any
-        </label>
-      </div>
+  <form id="searchForm" class="space-y-4">
+    <input id="query" type="text" placeholder="e.g. Brown Sessanta Nove Varsity"
+           class="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500">
 
-      <button
-        type="submit"
-        class="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-all font-semibold"
-      >
-        Search
-      </button>
-    </form>
+    <div class="flex justify-center gap-4">
+      <label class="flex items-center gap-2"><input type="radio" name="gender" value="male" class="accent-indigo-500" /> Male</label>
+      <label class="flex items-center gap-2"><input type="radio" name="gender" value="female" class="accent-indigo-500" /> Female</label>
+      <label class="flex items-center gap-2"><input type="radio" name="gender" value="" class="accent-indigo-500" checked /> Any</label>
+    </div>
 
-    <div id="result" class="mt-6 text-center"></div>
-  </div>
+    <button type="submit" class="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-all font-semibold">
+      Search
+    </button>
+  </form>
 
-  <script>
-    const form = document.getElementById("searchForm");
-    const resultBox = document.getElementById("result");
+  <div id="result" class="mt-6 text-center"></div>
+</div>
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      resultBox.innerHTML = `<p class="text-gray-400">Searching...</p>`;
+<script>
+const form = document.getElementById("searchForm");
+const resultBox = document.getElementById("result");
 
-      const query = document.getElementById("query").value.trim();
-      const gender = document.querySelector('input[name="gender"]:checked').value;
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const query = document.getElementById("query").value.trim();
+  const gender = document.querySelector('input[name="gender"]:checked').value;
+  resultBox.innerHTML = `<p class="text-gray-400">Searching...</p>`;
 
-      if (!query) {
-        resultBox.innerHTML = `<p class="text-red-400">Please enter a search term.</p>`;
-        return;
-      }
+  if (!query) {
+    resultBox.innerHTML = `<p class="text-red-400">Please enter a search term.</p>`;
+    return;
+  }
 
-      try {
-        const resp = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, gender }),
-        });
-        const data = await resp.json();
+  try {
+    const genderSuffix = gender ? `${gender} ` : "";
+    const searchQuery = `${query} clothes ${genderSuffix}site:forge.pleb.masters.de`;
 
-        if (!data.ok) {
-          resultBox.innerHTML = `<p class="text-yellow-400">${data.message || "No results found."}</p>`;
-          return;
-        }
+    // DuckDuckGo HTML via proxy (CORS bypass)
+    const ddgUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`)}`;
+    const { data } = await axios.get(ddgUrl);
+    const html = data.contents;
+    const $ = cheerio.load(html);
 
-        resultBox.innerHTML = `
-          <p class="text-gray-300 mb-2">Match found (${data.gender}):</p>
-          <a href="${data.result.href}" target="_blank" 
-             class="text-indigo-400 hover:underline break-words">
-             ${data.result.text}
-          </a>
-        `;
-      } catch {
-        resultBox.innerHTML = `<p class="text-red-400">Error searching. Try again later.</p>`;
+    let results = [];
+
+    $("a.result__a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text();
+      if (href && href.includes("forge.plebmasters.de") && /clothes/.test(href)) {
+        results.push({ href, text });
       }
     });
-  </script>
+
+    if (!results.length) {
+      resultBox.innerHTML = `<p class="text-yellow-400">No matching link found.</p>`;
+      return;
+    }
+
+    // Scoring: exact name match + gender match
+    const scored = results.map(r => {
+      let score = 0;
+      if (r.text.toLowerCase().includes(query.toLowerCase())) score += 10; // exact match boost
+      const desc = r.text.toLowerCase();
+      if (gender && desc.includes(gender.toLowerCase())) score += 5;
+      return { ...r, score };
+    });
+
+    scored.sort((a,b) => b.score - a.score);
+    const topResults = scored.slice(0,3);
+
+    resultBox.innerHTML = topResults.map(r => {
+      let detectedGender = "Unknown";
+      const desc = r.text.toLowerCase();
+      if (desc.includes("female")) detectedGender = "Female";
+      else if (desc.includes("male")) detectedGender = "Male";
+
+      return `
+        <div class="mb-4">
+          <p class="text-gray-300 mb-1">${r.text} (${detectedGender})</p>
+          <a href="${r.href}" target="_blank" class="text-indigo-400 hover:underline break-words">${r.href}</a>
+          <button class="copy-btn ml-2 text-gray-400" onclick="navigator.clipboard.writeText('${r.href}').then(()=>alert('Link copied!'))">📋 Copy</button>
+        </div>
+      `;
+    }).join("");
+
+  } catch(err) {
+    console.error(err);
+    resultBox.innerHTML = `<p class="text-red-400">Error fetching results. Try again later.</p>`;
+  }
+});
+</script>
+
 </body>
 </html>
