@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Forge Search</title>
+<title>Smart Forge Search Debug</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <style>
@@ -13,12 +13,13 @@ a { transition: color 0.25s; }
 .copy-btn { cursor:pointer; transition: all 0.2s; }
 .copy-btn:hover { color: #818cf8; }
 .highlight { background-color: #334155; padding: 0 4px; border-radius: 3px; }
+.debug { background: #1e293b; padding: 8px; margin-top: 8px; border-radius: 6px; font-size: 0.875rem; white-space: pre-wrap; }
 </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
 
 <div class="w-full max-w-xl bg-gray-800 rounded-2xl p-8 shadow-2xl">
-  <h1 class="text-3xl font-bold text-center mb-6">Smart Forge Search</h1>
+  <h1 class="text-3xl font-bold text-center mb-6">Smart Forge Search (Debug)</h1>
 
   <form id="searchForm" class="space-y-4">
     <input id="query" type="text" placeholder="e.g. Brown Sessanta Nove Varsity"
@@ -36,11 +37,13 @@ a { transition: color 0.25s; }
   </form>
 
   <div id="result" class="mt-6 text-center"></div>
+  <div id="debug" class="debug"></div>
 </div>
 
 <script>
 const form = document.getElementById("searchForm");
 const resultBox = document.getElementById("result");
+const debugBox = document.getElementById("debug");
 
 function highlightQuery(text, query) {
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
@@ -52,6 +55,7 @@ form.addEventListener("submit", async (e) => {
   const query = document.getElementById("query").value.trim();
   const gender = document.querySelector('input[name="gender"]:checked').value;
   resultBox.innerHTML = `<p class="text-gray-400">Searching...</p>`;
+  debugBox.innerHTML = '';
 
   if (!query) {
     resultBox.innerHTML = `<p class="text-red-400">Please enter a search term.</p>`;
@@ -61,30 +65,34 @@ form.addEventListener("submit", async (e) => {
   try {
     const genderSuffix = gender ? `${gender} ` : "";
     const searchQuery = `${query} clothes ${genderSuffix}site:forge.pleb.masters.de`;
+    debugBox.innerHTML += `Query sent to DuckDuckGo: "${searchQuery}"\n`;
 
-    // DuckDuckGo HTML via AllOrigins proxy (CORS bypass)
+    // DuckDuckGo HTML via proxy (CORS bypass)
     const ddgUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`)}`;
     const { data } = await axios.get(ddgUrl);
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(data.contents, "text/html");
     const links = Array.from(doc.querySelectorAll("a.result__a"));
+    debugBox.innerHTML += `Total links found in search results: ${links.length}\n`;
 
     let results = [];
     for (const el of links) {
       const href = el.getAttribute("href");
       const text = el.textContent;
+      debugBox.innerHTML += `Found link: ${text} -> ${href}\n`;
       if (href && href.includes("forge.plebmasters.de") && /clothes/.test(href)) {
         results.push({ href, text });
       }
     }
+    debugBox.innerHTML += `Links matching filter (forge + clothes): ${results.length}\n`;
 
     if (!results.length) {
       resultBox.innerHTML = `<p class="text-yellow-400">No matching link found.</p>`;
       return;
     }
 
-    // Scoring: exact match + gender match
+    // Score results: exact match + gender match
     const scored = results.map(r => {
       let score = 0;
       if (r.text.toLowerCase().includes(query.toLowerCase())) score += 10;
@@ -114,9 +122,9 @@ form.addEventListener("submit", async (e) => {
   } catch(err) {
     console.error(err);
     resultBox.innerHTML = `<p class="text-red-400">Error fetching results. Try again later.</p>`;
+    debugBox.innerHTML += `Error: ${err.message}`;
   }
 });
 </script>
-
 </body>
 </html>
